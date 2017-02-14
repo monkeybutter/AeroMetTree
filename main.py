@@ -1,8 +1,11 @@
 #!/usr/bin/python
 
 import json
+import random
 import pickle
 import time
+import math
+import copy
 import os.path
 import pandas as pd
 import numpy as np
@@ -90,11 +93,72 @@ def tree_eval(node, row):
 
     return result
 
+def tree_mae_calc(node, df):
+    acc = 0.0
+    total_len = len(df.index)
+
+    for _, row in df.iterrows():
+        acc += abs(tree_eval(node, row) - row[node.data.class_var])
+
+    return acc / total_len
+
+def tree_rmse_calc(node, df):
+    acc = 0.0
+    total_len = len(df.index)
+
+    for _, row in df.iterrows():
+        acc += math.pow((tree_eval(node, row) - row[node.data.class_var]), 2)
+
+    return math.sqrt(acc / total_len)
+
+
+def cxval_k_folds_split(df, k_folds, seed):
+
+    random.seed(seed)
+
+    dataframes = []
+    group_size = int(round(df.shape[0]*(1.0/k_folds)))
+
+    for i in range(k_folds-1):
+        rows = random.sample(list(df.index), group_size)
+        dataframes.append(df.ix[rows])
+        df = df.drop(rows)
+
+    dataframes.append(df)
+
+    return dataframes
+
+
+def cxval_select_fold(i_fold, df_folds):
+    df_folds_copy = copy.deepcopy(df_folds)
+
+    if 0 <= i_fold < len(df_folds):
+        test_df = df_folds_copy[i_fold]
+        del df_folds_copy[i_fold]
+        train_df = pd.concat(df_folds_copy)
+        return train_df, test_df
+
+    else:
+        raise Exception('Group not in range!')
+
+def cxval_test(df, class_var, var_desc, leaf_size, k_folds=5, seed=1):
+    df_folds = cxval_k_folds_split(df, k_folds, seed)
+    rmse_results = []
+    mae_results = []
+
+    for i in range(k_folds):
+        train_df, test_df = cxval_select_fold(i, df_folds)
+        tree = tree_trainer(train_df, class_var, var_desc, leaf_size)
+
+        mae_results.append(tree_mae_calc(tree, test_df))
+        rmse_results.append(tree_rmse_calc(tree, test_df))
+
+    return sum(mae_results)/k_folds, sum(rmse_results)/k_folds
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AeroMetTree model training command line utility.')
-    parser.add_argument('--data', dest='data_path', help='Path to the CSV file containing the data to train the model')
-    parser.add_argument('--config', dest='config_path', help='Path to the CSV file containing the data to train the model')
+    parser.add_argument('--data', dest='data_path', help='Path to the CSV file containing the data to train the tree', required=True)
+    parser.add_argument('--config', dest='config_path', help='Path to the JSON file containing the parameters to set model', required=True)
 
     args = parser.parse_args()
     #print(args.data_path)
@@ -112,19 +176,22 @@ if __name__ == "__main__":
 
     with open(args.config_path) as conf_file:    
         tree_params = json.load(conf_file)
-        #print(tree_params)
 
         class_var = tree_params['output']
         # 1 Classic
         tree_desc = {}
         for var in tree_params['input']:
-            tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
+            if not tree_params['contiguous_splits'] and var['type'] == "cir":
+                tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
+            else:
+                tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
    
     for size in [1000, 500, 250, 100, 50]:
-        #print(tree_desc)
-        #tree = tree_trainer(df, class_var, tree_desc, tree_params['max_leaf_size'])
+        print("max_leaf_size", size)
+        _, a = cxval_test(df, class_var, tree_desc, size)
+        print("rmse", a)
+        """
         tree = tree_trainer(df, class_var, tree_desc, size)
-        #tree_pprinter(tree)
         pickle.dump(tree, open(model_name, "wb"))
 
         acc_tree = 0.0
@@ -137,3 +204,4 @@ if __name__ == "__main__":
         print("Abs Tree error:", (acc_tree/len(df.index)) ** .5)
         print("Abs GFS error", (acc_gfs/len(df.index)) ** .5)
         print("___________")
+        """
