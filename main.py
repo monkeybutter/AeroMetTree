@@ -185,16 +185,40 @@ if __name__ == "__main__":
             # 1 Classic
             tree_desc = {}
 
+            """
             for var in tree_params['input']:
                 if not tree_params['contiguous_splits'] and var['type'] == "cir":
                     tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
                 else:
                     tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
-       
+            """
+
             for size in [1000, 500, 250, 100, 50]:
-                print("max_leaf_size", size)
+                print("MaxLeafSize: ", size)
+                
+                #Linear
+                for var in tree_params['input']:
+                    tree_desc[var['name']] = {"type": "lin", "method": "classic", "bounds": [[-np.inf, np.inf]]}
+
                 _, a = cxval_test(df, class_var, tree_desc, size)
-                print("rmse", a)
+                print("  - Linear: ", a, end='')
+                
+		#Lund
+                for var in tree_params['input']:
+                    if var['type'] == "cir":
+                        tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
+
+                _, a = cxval_test(df, class_var, tree_desc, size)
+                print("    Lund: ", a, end='')
+                
+		#Lund
+                for var in tree_params['input']:
+                    if var['type'] == "cir":
+                        tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
+
+                _, a = cxval_test(df, class_var, tree_desc, size)
+                print("    Our: ", a)
+
                 """
                 tree = tree_trainer(df, class_var, tree_desc, size)
                 pickle.dump(tree, open(model_name, "wb"))
