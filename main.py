@@ -43,7 +43,7 @@ def tree_pprinter(node):
     return pprinter(node)
 
 
-def tree_trainer(df, class_var, var_desc, stop=50, variance=.05):
+def tree_trainer(df, class_var, var_desc, stop=50, variance=.01):
         if class_var not in df.columns:
             raise Exception('Class variable not in DataFrame')
 
@@ -174,34 +174,39 @@ if __name__ == "__main__":
         exit(1)
     """
 
-    with open(args.config_path) as conf_file:    
-        tree_params = json.load(conf_file)
+    data_files = ["datasets/eddt_clean.csv", "datasets/egll_clean.csv", "datasets/lebl_clean.csv", "datasets/lfpg_clean.csv", "datasets/limc_clean.csv", "datasets/yssy_clean.csv", "datasets/zbaa_clean.csv"]
+    for data_file in data_files:
+        print(data_file)
+        df = pd.read_csv(data_file)
+        with open(args.config_path) as conf_file:    
+            tree_params = json.load(conf_file)
 
-        class_var = tree_params['output']
-        # 1 Classic
-        tree_desc = {}
-        for var in tree_params['input']:
-            if not tree_params['contiguous_splits'] and var['type'] == "cir":
-                tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
-            else:
-                tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
-   
-    for size in [1000, 500, 250, 100, 50]:
-        print("max_leaf_size", size)
-        _, a = cxval_test(df, class_var, tree_desc, size)
-        print("rmse", a)
-        """
-        tree = tree_trainer(df, class_var, tree_desc, size)
-        pickle.dump(tree, open(model_name, "wb"))
+            class_var = tree_params['output']
+            # 1 Classic
+            tree_desc = {}
 
-        acc_tree = 0.0
-        acc_gfs = 0.0
-        for _, row in df.iterrows():
-            acc_tree += (row[tree.data.class_var] - tree_eval(tree, row)) ** 2 
-            acc_gfs += (row[tree.data.class_var] - row["gfs_wind_spd"]) ** 2 
+            for var in tree_params['input']:
+                if not tree_params['contiguous_splits'] and var['type'] == "cir":
+                    tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
+                else:
+                    tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
        
-        print("max_leaf_size", size)
-        print("Abs Tree error:", (acc_tree/len(df.index)) ** .5)
-        print("Abs GFS error", (acc_gfs/len(df.index)) ** .5)
-        print("___________")
-        """
+            for size in [1000, 500, 250, 100, 50]:
+                print("max_leaf_size", size)
+                _, a = cxval_test(df, class_var, tree_desc, size)
+                print("rmse", a)
+                """
+                tree = tree_trainer(df, class_var, tree_desc, size)
+                pickle.dump(tree, open(model_name, "wb"))
+
+                acc_tree = 0.0
+                acc_gfs = 0.0
+                for _, row in df.iterrows():
+                    acc_tree += (row[tree.data.class_var] - tree_eval(tree, row)) ** 2 
+                    acc_gfs += (row[tree.data.class_var] - row["gfs_wind_spd"]) ** 2 
+               
+                print("max_leaf_size", size)
+                print("Abs Tree error:", (acc_tree/len(df.index)) ** .5)
+                print("Abs GFS error", (acc_gfs/len(df.index)) ** .5)
+                print("___________")
+                """
