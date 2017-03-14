@@ -39,28 +39,52 @@ def rel_hum(t, td):
 
 def get_station_idx(tstamp, code):
     code = code.decode('utf-8')
-    
-    with urllib.request.urlopen(madis_url_allStationName.format(year=tstamp.year, month=tstamp.month, day=tstamp.day, hour=tstamp.hour)) as response:
-        for line in response:
-            if re.match(regex, line.decode('utf-8')):
-                airports = response.readline().decode('utf-8')
-                airports = [a[2:-1] for a in airports.split(',')] 
-                return airports.index(code)
+    try:
+        with urllib.request.urlopen(madis_url_allStationName.format(year=tstamp.year, month=tstamp.month, day=tstamp.day, hour=tstamp.hour)) as response:
+            for line in response:
+                if re.match(regex, line.decode('utf-8')):
+                    airports = response.readline().decode('utf-8')
+                    airports = [a[2:-1] for a in airports.split(',')] 
+                    return airports.index(code) if code in airports else -1
+    except:
+        return -1
+
+    return -1
 
 def get_madis_vars(tstamp, idx):
     params = {}  
     with urllib.request.urlopen(madis_url.format(year=tstamp.year, month=tstamp.month, day=tstamp.day, hour=tstamp.hour, idx=idx)) as response:
         for line in response:
             if line == b'dewpoint[1]\n':
-                params['dew'] = float(response.readline()[:-1].decode('utf-8')) - 273.15
+                value = float(response.readline()[:-1].decode('utf-8')) - 273.15
+                if value <= 1000.0:
+                    params['dew'] = value
+                else:
+                    params['dew'] = float('nan')
             elif line == b'temperature[1]\n':
-                params['temp'] = float(response.readline()[:-1].decode('utf-8')) - 273.15
+                value = float(response.readline()[:-1].decode('utf-8')) - 273.15
+                if value <= 1000.0:
+                    params['temp'] = value
+                else:
+                    params['temp'] = float('nan')
             elif line == b'windDir[1]\n':
-                params['wind_dir'] = float(response.readline()[:-1].decode('utf-8'))
+                value = float(response.readline()[:-1].decode('utf-8'))
+                if value <= 360.0:
+                    params['wind_dir'] = value
+                else:
+                    params['wind_dir'] = float('nan')
             elif line == b'windSpeed[1]\n':
-                params['wind_speed'] = float(response.readline()[:-1].decode('utf-8'))
+                value = float(response.readline()[:-1].decode('utf-8'))
+                if value <= 1000.0:
+                    params['wind_speed'] = value
+                else:
+                    params['wind_speed'] = float('nan')
             elif line == b'altimeter[1]\n':
-                params['press'] = float(response.readline()[:-1].decode('utf-8'))/100
+                value = float(response.readline()[:-1].decode('utf-8'))/100
+                if value <= 10000.0:
+                    params['press'] = value
+                else:
+                    params['press'] = float('nan')
     return params
 
 def get_gfs_vars(tstamp, step, idx_i, idx_j):
@@ -136,16 +160,18 @@ if __name__ == "__main__":
    print("iso_date,obs_press,obs_temp,obs_rh,obs_wdir,obs_wspd,gfs_press,gfs_temp,gfs_rh,gfs_wdir,gfs_wspd,date,time")
    while start_date <= end_date:
       idx = get_station_idx(start_date, airport)
-      metar = get_madis_vars(start_date, idx)
-      gfs = get_gfs_vars(start_date, 0, idx_i, idx_j)
+      if idx != -1:
+          metar = get_madis_vars(start_date, idx)
+          gfs = get_gfs_vars(start_date, 0, idx_i, idx_j)
       
-      print("{0},{1:0.1f},{2:0.1f},{3:0.1f},{4:0.1f},{5:0.1f},{6:0.1f},{7:0.1f},{8:0.1f},{9:0.1f},{10:0.1f},{11},{12}".format(start_date.strftime("%Y-%m-%d %H:%M:%S"), metar["press"], metar["temp"], rel_hum(metar["temp"], metar["dew"]), metar["wind_dir"], metar["wind_speed"], gfs["press"], gfs["temp"], gfs["rh"], gfs["wind_dir"], gfs["wind_spd"], julian2angle(start_date), time2angle(start_date)))
+          print("{0},{1:0.1f},{2:0.1f},{3:0.1f},{4:0.1f},{5:0.1f},{6:0.1f},{7:0.1f},{8:0.1f},{9:0.1f},{10:0.1f},{11},{12}".format(start_date.strftime("%Y-%m-%d %H:%M:%S"), metar["press"], metar["temp"], rel_hum(metar["temp"], metar["dew"]), metar["wind_dir"], metar["wind_speed"], gfs["press"], gfs["temp"], gfs["rh"], gfs["wind_dir"], gfs["wind_spd"], julian2angle(start_date), time2angle(start_date)))
 
       temp_date = start_date + timedelta(hours=3)
       idx = get_station_idx(temp_date, airport)
-      metar = get_madis_vars(temp_date, idx)
-      gfs = get_gfs_vars(start_date, 3, idx_i, idx_j)
+      if idx != -1:
+          metar = get_madis_vars(temp_date, idx)
+          gfs = get_gfs_vars(start_date, 3, idx_i, idx_j)
       
-      print("{0},{1:0.1f},{2:0.1f},{3:0.1f},{4:0.1f},{5:0.1f},{6:0.1f},{7:0.1f},{8:0.1f},{9:0.1f},{10:0.1f},{11},{12}".format(temp_date.strftime("%Y-%m-%d %H:%M:%S"), metar["press"], metar["temp"], rel_hum(metar["temp"], metar["dew"]), metar["wind_dir"], metar["wind_speed"], gfs["press"], gfs["temp"], gfs["rh"], gfs["wind_dir"], gfs["wind_spd"], julian2angle(temp_date), time2angle(temp_date)))
+          print("{0},{1:0.1f},{2:0.1f},{3:0.1f},{4:0.1f},{5:0.1f},{6:0.1f},{7:0.1f},{8:0.1f},{9:0.1f},{10:0.1f},{11},{12}".format(temp_date.strftime("%Y-%m-%d %H:%M:%S"), metar["press"], metar["temp"], rel_hum(metar["temp"], metar["dew"]), metar["wind_dir"], metar["wind_speed"], gfs["press"], gfs["temp"], gfs["rh"], gfs["wind_dir"], gfs["wind_spd"], julian2angle(temp_date), time2angle(temp_date)))
      
       start_date += timedelta(hours=6)

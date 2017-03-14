@@ -161,76 +161,26 @@ if __name__ == "__main__":
     parser.add_argument('--config', dest='config_path', help='Path to the JSON file containing the parameters to set model', required=True)
 
     args = parser.parse_args()
-    #print(args.data_path)
 
-    df = pd.read_csv(args.data_path)
-    tree = None
+    df = pd.read_csv(args.data_path).dropna()
     model_name = os.path.splitext(os.path.basename(args.config_path))[0] + ".save"
 
-    """
     if os.path.isfile(model_name):
         tree = pickle.load(open(model_name, "rb"))
         tree_pprinter(tree)
         exit(1)
-    """
 
-    data_files = ["datasets/eddt_clean.csv", "datasets/egll_clean.csv", "datasets/lebl_clean.csv", "datasets/lfpg_clean.csv", "datasets/limc_clean.csv", "datasets/yssy_clean.csv", "datasets/zbaa_clean.csv"]
-    for data_file in data_files:
-        print(data_file)
-        df = pd.read_csv(data_file)
-        with open(args.config_path) as conf_file:    
-            tree_params = json.load(conf_file)
+    print(args.data_path)
+    df = pd.read_csv(args.data_path)
 
-            class_var = tree_params['output']
-            # 1 Classic
-            tree_desc = {}
+    with open(args.config_path) as conf_file:    
+        tree_params = json.load(conf_file)
+        tree_desc = {}
+        for var in tree_params['input']:
+            if not tree_params['contiguous_splits'] and var['type'] == "cir":
+                tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
+            else:
+                tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
 
-            """
-            for var in tree_params['input']:
-                if not tree_params['contiguous_splits'] and var['type'] == "cir":
-                    tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
-                else:
-                    tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
-            """
-
-            for size in [1000, 500, 250, 100, 50]:
-                print("MaxLeafSize: ", size)
-                
-                #Linear
-                for var in tree_params['input']:
-                    tree_desc[var['name']] = {"type": "lin", "method": "classic", "bounds": [[-np.inf, np.inf]]}
-
-                _, a = cxval_test(df, class_var, tree_desc, size)
-                print("  - Linear: ", a, end='')
-                
-		#Lund
-                for var in tree_params['input']:
-                    if var['type'] == "cir":
-                        tree_desc[var['name']] = {"type": var['type'], "method": "subset", "bounds": [[-np.inf, np.inf]]}
-
-                _, a = cxval_test(df, class_var, tree_desc, size)
-                print("    Lund: ", a, end='')
-                
-		#Lund
-                for var in tree_params['input']:
-                    if var['type'] == "cir":
-                        tree_desc[var['name']] = {"type": var['type'], "method": "classic", "bounds": [[-np.inf, np.inf]]}
-
-                _, a = cxval_test(df, class_var, tree_desc, size)
-                print("    Our: ", a)
-
-                """
-                tree = tree_trainer(df, class_var, tree_desc, size)
-                pickle.dump(tree, open(model_name, "wb"))
-
-                acc_tree = 0.0
-                acc_gfs = 0.0
-                for _, row in df.iterrows():
-                    acc_tree += (row[tree.data.class_var] - tree_eval(tree, row)) ** 2 
-                    acc_gfs += (row[tree.data.class_var] - row["gfs_wind_spd"]) ** 2 
-               
-                print("max_leaf_size", size)
-                print("Abs Tree error:", (acc_tree/len(df.index)) ** .5)
-                print("Abs GFS error", (acc_gfs/len(df.index)) ** .5)
-                print("___________")
-                """
+        tree = tree_trainer(df, tree_params['output'], tree_desc, tree_params['max_leaf_size'])
+        pickle.dump(tree, open(model_name, "wb"))
